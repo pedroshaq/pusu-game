@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PUSU</title>
+<style>
+  :root {
+    --bg-deep: #0b1410;
+    --bg-mid: #142620;
+    --bg-panel: #1b3129;
+    --ink: #eaf4ee;
+    --ink-dim: #8fae9d;
+    --gold: #f1c40f;
+    --danger: #e74c3c;
+    --ok: #6ee7a8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background:
+      radial-gradient(ellipse at 50% -10%, #234639 0%, transparent 55%),
+      radial-gradient(ellipse at 85% 105%, #1d3a2e 0%, transparent 50%),
+      linear-gradient(180deg, var(--bg-deep), var(--bg-mid) 60%, var(--bg-deep));
+    color: var(--ink);
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 20px 12px 60px;
+  }
+
+  h1.title {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-weight: 800; letter-spacing: 0.14em;
+    font-size: clamp(1.8rem, 6vw, 2.6rem);
+    margin: 6px 0 2px;
+    background: linear-gradient(120deg, var(--gold), #ff9d5c 45%, #6ee7a8);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-align: center;
+  }
+  .subtitle { color: var(--ink-dim); font-size: 0.85rem; margin-bottom: 14px; text-align: center; }
+
+  #rulesModal {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(4, 10, 8, 0.9);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  #rulesModal .box {
+    background: var(--bg-panel); border: 1px solid #2f5142; border-radius: 16px;
+    max-width: 480px; padding: 26px 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  #rulesModal h2 { font-family: Georgia, serif; color: var(--gold); margin-top: 0; text-align: center; }
+  #rulesModal ul { color: var(--ink-dim); font-size: 0.88rem; line-height: 1.65; padding-left: 20px; }
+  #rulesModal button.start {
+    width: 100%; margin-top: 12px; padding: 12px; border: none; border-radius: 10px;
+    background: linear-gradient(120deg, var(--gold), #ff9d5c);
+    color: #241300; font-weight: 800; font-size: 1rem; cursor: pointer;
+  }
+
+  .statusbar {
+    display: flex; align-items: center; justify-content: center; gap: 18px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 999px; padding: 8px 20px; margin-bottom: 16px; font-size: 0.85rem;
+    flex-wrap: wrap; text-align: center;
+  }
+  .statusbar .phase-label { font-family: Georgia, serif; font-weight: 800; color: var(--gold); }
+  .front-dots { display: flex; gap: 6px; }
+  .front-dots .dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.15); }
+  .front-dots .dot.filled { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+
+  .boards {
+    display: flex; gap: 22px; flex-wrap: wrap; justify-content: center;
+    margin-bottom: 16px; width: 100%; max-width: 780px;
+  }
+  .board-wrapper {
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px; padding: 14px; flex: 1; min-width: 260px; max-width: 340px;
+  }
+  .board-wrapper h3 {
+    font-family: Georgia, serif; font-size: 0.95rem; text-align: center; margin: 0 0 10px;
+    color: var(--ink-dim); letter-spacing: 0.04em;
+  }
+  .grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px;
+  }
+  .cell {
+    aspect-ratio: 1; border-radius: 8px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.15); font-size: 1.1rem;
+    transition: transform 0.12s ease;
+    position: relative;
+  }
+  .cell:active { transform: scale(0.93); }
+  .cell.selected { outline: 2px solid var(--gold); box-shadow: 0 0 14px rgba(241,196,15,0.5); }
+  .cell.selectable:hover { background: rgba(255,255,255,0.1); }
+  .cell.glow { animation: cellGlow 1.6s infinite; }
+  @keyframes cellGlow {
+    0%, 100% { box-shadow: 0 0 4px rgba(110,231,168,0.3); }
+    50% { box-shadow: 0 0 16px rgba(110,231,168,0.7); }
+  }
+  .cell.trap { background: linear-gradient(150deg, #ff8f6b, var(--danger)); color: #2a0a05; }
+  .cell.occupied { background: rgba(255,255,255,0.08); border-style: dashed; color: var(--ink-dim); }
+  .cell.unit {
+    color: #16261d; font-weight: 800; animation: cellReveal 0.35s ease;
+  }
+  @keyframes cellReveal { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .cell .u-emoji { font-size: 1.15rem; line-height: 1; }
+  .cell .u-name { font-size: 0.42rem; letter-spacing: 0.03em; margin-top: 1px; }
+
+  .u-1 { background: linear-gradient(150deg, #b7d18f, #7f9c5c); }
+  .u-2 { background: linear-gradient(150deg, #c6cdd6, #8d99ae); }
+  .u-3 { background: linear-gradient(150deg, #ffbf7a, #d97706); }
+  .u-4 { background: linear-gradient(150deg, #ff9c8f, #c0392b); }
+  .u-5 { background: linear-gradient(150deg, #fff2a8, #f1c40f); }
+
+  .hand-label { color: var(--ink-dim); font-size: 0.8rem; margin: 6px 0 8px; letter-spacing: 0.05em; }
+  .unit-select {
+    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 14px;
+  }
+  .unit-choice {
+    width: 66px; height: 78px; border-radius: 10px; border: 2px solid transparent;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    cursor: pointer; color: #16261d; font-weight: 800; transition: transform 0.15s ease;
+  }
+  .unit-choice:hover { transform: translateY(-4px); }
+  .unit-choice.selected { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); transform: translateY(-6px); }
+  .unit-choice.disabled { opacity: 0.3; cursor: not-allowed; }
+  .unit-choice .emoji { font-size: 1.4rem; }
+  .unit-choice .count { font-size: 0.6rem; opacity: 0.8; }
+
+  .actions { display: flex; gap: 12px; margin-top: 6px; }
+  button.primary {
+    padding: 11px 24px; border: none; border-radius: 999px;
+    background: linear-gradient(120deg, var(--gold), #ff9d5c);
+    color: #241300; font-weight: 800; font-size: 0.9rem; cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+  button.primary:disabled { opacity: 0.35; cursor: not-allowed; }
+  button.primary:not(:disabled):hover { transform: translateY(-2px); }
+  button.ghost {
+    padding: 11px 20px; border: 1px solid rgba(255,255,255,0.25); border-radius: 999px;
+    background: transparent; color: var(--ink); font-weight: 700; font-size: 0.85rem; cursor: pointer;
+  }
+
+  .waiting-note { color: var(--ink-dim); font-size: 0.8rem; margin-top: 8px; min-height: 1.2em; text-align: center; }
+
+  #resultOverlay {
+    position: fixed; inset: 0; z-index: 900; background: rgba(4, 10, 8, 0.92);
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  #resultOverlay .box {
+    background: var(--bg-panel); border: 1px solid #2f5142; border-radius: 18px;
+    padding: 28px 26px; max-width: 460px; text-align: center;
+    box-shadow: 0 24px 70px rgba(0,0,0,0.55); max-height: 85vh; overflow-y: auto;
+  }
+  #resultOverlay h2 { font-family: Georgia, serif; font-size: 1.7rem; margin: 0 0 10px; }
+  #resultOverlay h2.win { color: var(--ok); }
+  #resultOverlay h2.lose { color: #ff8585; }
+  #resultOverlay h2.draw { color: var(--gold); }
+  #resultOverlay table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 14px 0; }
+  #resultOverlay th, #resultOverlay td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  #resultOverlay th { color: var(--ink-dim); font-weight: 600; }
+
+  .error-toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #7a1f1f; color: #ffe3e3; padding: 10px 18px; border-radius: 10px;
+    font-size: 0.85rem; display: none; z-index: 1100; max-width: 90vw; text-align: center;
+  }
+
+  @media (max-width: 700px) {
+    .boards { flex-direction: column; align-items: center; }
+    .board-wrapper { width: 100%; max-width: 340px; }
+  }
+</style>
+</head>
+<body>
+
+  <div id="rulesModal">
+    <div class="box">
+      <h2>PUSU</h2>
+      <ul>
+        <li><strong>1. Aşama:</strong> Rakip tahtasına gizlice 2 tuzak (pusu) kur.</li>
+        <li><strong>2. Aşama:</strong> 5 cephe sırayla açılır. Her cepheye en fazla 3 birlik gönderilir. Her birlik türünden (Piyade, Mekanize, Tank, Hava K., Topçu) oyun boyunca en fazla 3 adet kullanılabilir.</li>
+        <li><strong>3. Aşama:</strong> Savaş bitince 1 tuzak daha kurulur (toplam 3).</li>
+        <li><strong>Kazanma:</strong> Tuzağa düşen birliğin gücü sayılmaz. Her cephenin toplam gücü karşılaştırılır - daha çok cepheyi kazanan oyunu kazanır.</li>
+        <li>Rakibin senin tahtana kurduğu tuzak, sonuçlar açıklanana kadar sana <strong>hiç görünmez</strong>.</li>
+      </ul>
+      <button class="start" onclick="closeRules()">SAVAŞA BAŞLA</button>
+    </div>
+  </div>
+
+  <div id="resultOverlay">
+    <div class="box">
+      <h2 id="resultTitle">-</h2>
+      <div id="resultTableWrap"></div>
+      <button class="primary" onclick="startNewGame()">YENİ SAVAŞ</button>
+    </div>
+  </div>
+
+  <div class="error-toast" id="errorToast"></div>
+
+  <h1 class="title">PUSU</h1>
+  <div class="subtitle">Yapay zekaya karşı — sunucusuz, tek dosya</div>
+
+  <div class="statusbar">
+    <div class="phase-label" id="phaseLabel">-</div>
+    <div class="front-dots" id="frontDots"></div>
+  </div>
+
+  <div class="boards">
+    <div class="board-wrapper">
+      <h3>SENİN BÖLGEN</h3>
+      <div class="grid" id="gridMe"></div>
+    </div>
+    <div class="board-wrapper">
+      <h3>DÜŞMAN BÖLGESİ</h3>
+      <div class="grid" id="gridOpp"></div>
+    </div>
+  </div>
+
+  <div class="hand-label" id="unitLabel" style="display:none;">BİRLİK SEÇ</div>
+  <div class="unit-select" id="unitSelect" style="display:none;"></div>
+
+  <div class="actions">
+    <button class="primary" id="btnAction" disabled>-</button>
+    <button class="ghost" onclick="startNewGame()">YENİDEN BAŞLAT</button>
+  </div>
+  <div class="waiting-note" id="waitingNote"></div>
+
+<script>
+/*
+ * PUSU - Oyun Motoru
+ * ====================
+ * Kurallar:
+ *  1) Pusu Aşaması : Her oyuncu rakip tahtasına gizlice 2 tuzak (pusu) kurar.
+ *  2) Savaş Aşaması: 5 cephe (satır) sırayla açılır, her cepheye oyuncu
+ *     başına en fazla 3 birlik konur. Her birlik tipinden (1-5) oyun
+ *     boyunca en fazla 3 adet kullanılabilir (5 tip x 3 = 15 = 5 cephe x 3).
+ *  3) Son Pusu     : Savaş bitince her oyuncu 1 tuzak daha kurar (toplam 3).
+ *  4) Sonuç        : Tuzağa düşen birliklerin gücü sayılmaz. Her cephenin
+ *     toplam gücü karşılaştırılır, daha çok cepheyi kazanan oyunu kazanır.
+ *
+ * Kritik tasarım kuralı: bir oyuncunun KENDİ tahtasına rakip tarafından
+ * kurulan tuzaklar, sonuçlar açıklanana kadar o oyuncuya HİÇBİR ŞEKİLDE
+ * gösterilmez - aksi halde tuzak mekaniği anlamsız kalır.
+ *
+ * Bu motor hem tek-dosya (sunucusuz) AI modu, hem online PVP modu
+ * tarafından ortak kullanılır. Render tamamen div tabanlıdır - hiçbir
+ * yerde <table> kullanılmaz (önceki sürümdeki tbody kaynaklı DOM
+ * sorunlarının bir daha yaşanmaması için bilinçli tercih).
+ */
+(function (root, factory) {
+  if (typeof module === "object" && module.exports) {
+    module.exports = factory();
+  } else {
+    root.PusuEngine = factory();
+  }
+})(typeof self !== "undefined" ? self : this, function () {
+  "use strict";
+
+  var GRID_SIZE = 5;
+  var UNIT_TYPES = [1, 2, 3, 4, 5];
+  var MAX_PER_UNIT = 3;   // bir birlik tipinden oyun boyunca en fazla kullanım
+  var MAX_PER_FRONT = 3;  // bir cepheye oyuncu başına en fazla birlik
+  var PUSU_PHASE1_COUNT = 2;
+  var PUSU_TOTAL_COUNT = 3;
+
+  var UNIT_INFO = {
+    1: { name: "PİYADE",   emoji: "🪖", color: "#7f9c5c" },
+    2: { name: "MEKANİZE", emoji: "🚙", color: "#8d99ae" },
+    3: { name: "TANK",     emoji: "🛡️", color: "#d97706" },
+    4: { name: "HAVA K.",  emoji: "✈️",  color: "#c0392b" },
+    5: { name: "TOPÇU",    emoji: "💥", color: "#f1c40f" },
+  };
+
+  function emptyBoard() {
+    var b = [];
+    for (var x = 0; x < GRID_SIZE; x++) {
+      var row = [];
+      for (var y = 0; y < GRID_SIZE; y++) row.push("-");
+      b.push(row);
+    }
+    return b;
+  }
+
+  function newGame() {
+    return {
+      board: { player1: emptyBoard(), player2: emptyBoard() },
+      // pusu.player1 = player1'in player2'nin tahtasına kurduğu tuzaklar
+      pusu: { player1: [], player2: [] },
+      usedUnits: {
+        player1: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        player2: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      },
+      frontProgress: { player1: [0, 0, 0, 0, 0], player2: [0, 0, 0, 0, 0] },
+      phase: "pusu", // pusu -> battle -> final_pusu -> done
+      currentFront: 0,
+    };
+  }
+
+  function opponentOf(p) { return p === "player1" ? "player2" : "player1"; }
+
+  function pusuQuota(phase) {
+    if (phase === "pusu") return PUSU_PHASE1_COUNT;
+    if (phase === "final_pusu") return PUSU_TOTAL_COUNT;
+    return null;
+  }
+
+  function hasCoord(list, x, y) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i][0] === x && list[i][1] === y) return true;
+    }
+    return false;
+  }
+
+  function commitPusu(game, player, x, y) {
+    if (game.phase !== "pusu" && game.phase !== "final_pusu") {
+      return { ok: false, message: "Şu anda pusu kurma aşamasında değilsiniz." };
+    }
+    if (!(x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE)) {
+      return { ok: false, message: "Geçersiz koordinat." };
+    }
+
+    var quota = pusuQuota(game.phase);
+    var myPusu = game.pusu[player];
+
+    if (hasCoord(myPusu, x, y)) {
+      return { ok: false, message: "Bu noktaya zaten tuzak kurdunuz." };
+    }
+    if (myPusu.length >= quota) {
+      return { ok: false, message: "Bu aşamada kullanabileceğiniz tüm tuzakları kurdunuz." };
+    }
+
+    myPusu.push([x, y]);
+
+    if (game.phase === "pusu") {
+      if (game.pusu.player1.length >= PUSU_PHASE1_COUNT &&
+          game.pusu.player2.length >= PUSU_PHASE1_COUNT) {
+        game.phase = "battle";
+      }
+    } else if (game.phase === "final_pusu") {
+      if (game.pusu.player1.length >= PUSU_TOTAL_COUNT &&
+          game.pusu.player2.length >= PUSU_TOTAL_COUNT) {
+        game.phase = "done";
+      }
+    }
+
+    return { ok: true };
+  }
+
+  function commitUnit(game, player, x, y, unit) {
+    if (game.phase !== "battle") {
+      return { ok: false, message: "Şu anda savaş aşamasında değilsiniz." };
+    }
+    if (!(y >= 0 && y < GRID_SIZE)) {
+      return { ok: false, message: "Geçersiz koordinat." };
+    }
+    if (UNIT_TYPES.indexOf(unit) === -1) {
+      return { ok: false, message: "Geçersiz birlik türü." };
+    }
+    if (x !== game.currentFront) {
+      return { ok: false, message: "Bu tur sadece " + (game.currentFront + 1) + ". cepheye birlik gönderebilirsiniz." };
+    }
+    if (game.board[player][x][y] !== "-") {
+      return { ok: false, message: "Bu kare zaten dolu." };
+    }
+    if (game.usedUnits[player][unit] >= MAX_PER_UNIT) {
+      return { ok: false, message: "Bu birlik türünü zaten 3 kez kullandınız." };
+    }
+    if (game.frontProgress[player][x] >= MAX_PER_FRONT) {
+      return { ok: false, message: "Bu cepheye zaten 3 birlik gönderdiniz." };
+    }
+
+    game.board[player][x][y] = String(unit);
+    game.usedUnits[player][unit] += 1;
+    game.frontProgress[player][x] += 1;
+
+    var front = game.currentFront;
+    if (game.frontProgress.player1[front] >= MAX_PER_FRONT &&
+        game.frontProgress.player2[front] >= MAX_PER_FRONT) {
+      game.currentFront += 1;
+      if (game.currentFront >= GRID_SIZE) game.phase = "final_pusu";
+    }
+
+    return { ok: true };
+  }
+
+  function computeResults(game) {
+    var scores = { player1: [0, 0, 0, 0, 0], player2: [0, 0, 0, 0, 0] };
+    ["player1", "player2"].forEach(function (p) {
+      var opp = opponentOf(p);
+      var trapped = game.pusu[opp];
+      for (var x = 0; x < GRID_SIZE; x++) {
+        for (var y = 0; y < GRID_SIZE; y++) {
+          var val = game.board[p][x][y];
+          if (val !== "-" && !hasCoord(trapped, x, y)) {
+            scores[p][x] += parseInt(val, 10);
+          }
+        }
+      }
+    });
+
+    var p1Wins = 0, p2Wins = 0;
+    for (var i = 0; i < GRID_SIZE; i++) {
+      if (scores.player1[i] > scores.player2[i]) p1Wins++;
+      else if (scores.player2[i] > scores.player1[i]) p2Wins++;
+    }
+    var winner = "draw";
+    if (p1Wins > p2Wins) winner = "player1";
+    else if (p2Wins > p1Wins) winner = "player2";
+
+    return { scores: scores, winner: winner, frontWins: { player1: p1Wins, player2: p2Wins } };
+  }
+
+  function aiTakePusuTurn(game) {
+    var quota = pusuQuota(game.phase);
+    if (quota === null) return;
+    var aiPusu = game.pusu.player2;
+    var humanPusu = game.pusu.player1;
+    var attempts = 0;
+    while (aiPusu.length < quota && attempts < 200) {
+      attempts++;
+      var x = Math.floor(Math.random() * GRID_SIZE);
+      var y = Math.floor(Math.random() * GRID_SIZE);
+      if (hasCoord(aiPusu, x, y) || hasCoord(humanPusu, x, y)) continue;
+      aiPusu.push([x, y]);
+    }
+
+    if (game.phase === "pusu") {
+      if (game.pusu.player1.length >= PUSU_PHASE1_COUNT &&
+          game.pusu.player2.length >= PUSU_PHASE1_COUNT) {
+        game.phase = "battle";
+      }
+    } else if (game.phase === "final_pusu") {
+      if (game.pusu.player1.length >= PUSU_TOTAL_COUNT &&
+          game.pusu.player2.length >= PUSU_TOTAL_COUNT) {
+        game.phase = "done";
+      }
+    }
+  }
+
+  function aiTakeUnitTurn(game) {
+    if (game.phase !== "battle") return;
+    var front = game.currentFront;
+    if (game.frontProgress.player2[front] >= MAX_PER_FRONT) return;
+
+    var availableCols = [];
+    for (var y = 0; y < GRID_SIZE; y++) {
+      if (game.board.player2[front][y] === "-") availableCols.push(y);
+    }
+    for (var i = availableCols.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = availableCols[i];
+      availableCols[i] = availableCols[j];
+      availableCols[j] = tmp;
+    }
+
+    var availableUnits = UNIT_TYPES.filter(function (u) {
+      return game.usedUnits.player2[u] < MAX_PER_UNIT;
+    });
+
+    for (var idx = 0; idx < availableCols.length; idx++) {
+      if (game.frontProgress.player2[front] >= MAX_PER_FRONT || availableUnits.length === 0) break;
+      var colY = availableCols[idx];
+      var unit = availableUnits[Math.floor(Math.random() * availableUnits.length)];
+      game.board.player2[front][colY] = String(unit);
+      game.usedUnits.player2[unit] += 1;
+      game.frontProgress.player2[front] += 1;
+      if (game.usedUnits.player2[unit] >= MAX_PER_UNIT) {
+        availableUnits = availableUnits.filter(function (u) { return u !== unit; });
+      }
+    }
+
+    if (game.frontProgress.player1[front] >= MAX_PER_FRONT &&
+        game.frontProgress.player2[front] >= MAX_PER_FRONT) {
+      game.currentFront += 1;
+      if (game.currentFront >= GRID_SIZE) game.phase = "final_pusu";
+    }
+  }
+
+  // Hücre-durumu: "empty" | "unit:N" | "trap"
+  // NOT: Rakip tahtasında birliklerin VAR OLDUĞU bile gösterilmez (tam
+  // sis örtüsü) - sadece kendi kurduğun tuzaklar görünür. Bu, AI'nin
+  // hangi karelere birlik koyduğunu sızdırmamak için bilinçli bir
+  // tasarım kararıdır.
+  function renderGrid(game, viewer, owner) {
+    var board = game.board[owner];
+    var grid = [];
+    if (owner === viewer) {
+      for (var x = 0; x < GRID_SIZE; x++) {
+        var row = [];
+        for (var y = 0; y < GRID_SIZE; y++) {
+          row.push(board[x][y] !== "-" ? "unit:" + board[x][y] : "empty");
+        }
+        grid.push(row);
+      }
+    } else {
+      var myTraps = game.pusu[viewer];
+      for (var x2 = 0; x2 < GRID_SIZE; x2++) {
+        var row2 = [];
+        for (var y2 = 0; y2 < GRID_SIZE; y2++) {
+          row2.push(hasCoord(myTraps, x2, y2) ? "trap" : "empty");
+        }
+        grid.push(row2);
+      }
+    }
+    return grid;
+  }
+
+  function usedUnitsRemaining(game, player) {
+    var out = {};
+    UNIT_TYPES.forEach(function (u) {
+      out[u] = MAX_PER_UNIT - game.usedUnits[player][u];
+    });
+    return out;
+  }
+
+  function createAIController() {
+    var game = newGame();
+    return {
+      reset: function () { game = newGame(); },
+
+      commitPusu: function (x, y) {
+        var res = commitPusu(game, "player1", x, y);
+        if (res.ok) aiTakePusuTurn(game);
+        return res;
+      },
+
+      commitUnit: function (x, y, unit) {
+        var res = commitUnit(game, "player1", x, y, unit);
+        if (res.ok) aiTakeUnitTurn(game);
+        return res;
+      },
+
+      getState: function () {
+        return {
+          phase: game.phase,
+          current_front: game.currentFront,
+          player1_grid: renderGrid(game, "player1", "player1"),
+          player2_grid: renderGrid(game, "player1", "player2"),
+          my_used_units: usedUnitsRemaining(game, "player1"),
+        };
+      },
+
+      getResults: function () {
+        if (game.phase !== "done") {
+          return { ok: false, message: "Oyun henüz tamamlanmadı." };
+        }
+        var r = computeResults(game);
+        return {
+          ok: true,
+          scores_p1: r.scores.player1,
+          scores_p2: r.scores.player2,
+          front_wins_p1: r.frontWins.player1,
+          front_wins_p2: r.frontWins.player2,
+          winner: r.winner,
+          final_board_p1: game.board.player1,
+          final_board_p2: game.board.player2,
+          player1_pusu: game.pusu.player1,
+          player2_pusu: game.pusu.player2,
+        };
+      },
+    };
+  }
+
+  return {
+    GRID_SIZE: GRID_SIZE,
+    UNIT_TYPES: UNIT_TYPES,
+    UNIT_INFO: UNIT_INFO,
+    newGame: newGame,
+    commitPusu: commitPusu,
+    commitUnit: commitUnit,
+    computeResults: computeResults,
+    aiTakePusuTurn: aiTakePusuTurn,
+    aiTakeUnitTurn: aiTakeUnitTurn,
+    renderGrid: renderGrid,
+    usedUnitsRemaining: usedUnitsRemaining,
+    opponentOf: opponentOf,
+    createAIController: createAIController,
+  };
+});
+
+</script>
+<script>
+  let ctrl = null;
+  let selectedCell = null;      // {x,y} - hangi hücre seçili
+  let selectedUnit = null;      // seçili birlik tipi (savaş fazında)
+
+  function closeRules() { document.getElementById('rulesModal').style.display = 'none'; }
+
+  function showError(msg) {
+    const t = document.getElementById('errorToast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    clearTimeout(showError._t);
+    showError._t = setTimeout(() => { t.style.display = 'none'; }, 3000);
+  }
+
+  function startNewGame() {
+    document.getElementById('resultOverlay').style.display = 'none';
+    ctrl = window.PusuEngine.createAIController();
+    selectedCell = null;
+    selectedUnit = null;
+    buildGrids();
+    render();
+  }
+
+  function buildGrids() {
+    ['gridMe', 'gridOpp'].forEach(id => {
+      const grid = document.getElementById(id);
+      grid.innerHTML = '';
+      for (let x = 0; x < 5; x++) {
+        for (let y = 0; y < 5; y++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.dataset.x = x;
+          cell.dataset.y = y;
+          cell.onclick = () => onCellClick(id === 'gridOpp', x, y);
+          grid.appendChild(cell);
+        }
+      }
+    });
+  }
+
+  function unitCellHTML(unit) {
+    const info = window.PusuEngine.UNIT_INFO[unit];
+    return '<div class="u-emoji">' + info.emoji + '</div><div class="u-name">' + info.name + '</div>';
+  }
+
+  function onCellClick(isOpponent, x, y) {
+    const s = ctrl.getState();
+
+    if (s.phase === 'pusu' || s.phase === 'final_pusu') {
+      if (!isOpponent) { showError('Tuzak sadece DÜŞMAN BÖLGESİ\'ne kurulabilir!'); return; }
+      selectedCell = { x, y };
+      render();
+      return;
+    }
+
+    if (s.phase === 'battle') {
+      if (isOpponent) return;
+      const cellState = s.player1_grid[x][y];
+      if (cellState !== 'empty') return;
+      if (x !== s.current_front) { showError('Bu tur sadece ' + (s.current_front + 1) + '. cepheye birlik gönderebilirsin.'); return; }
+      selectedCell = { x, y };
+      render();
+    }
+  }
+
+  function selectUnit(unit) {
+    const s = ctrl.getState();
+    if (s.my_used_units[unit] <= 0) return;
+    selectedUnit = unit;
+    render();
+  }
+
+  function performAction() {
+    const s = ctrl.getState();
+
+    if (s.phase === 'pusu' || s.phase === 'final_pusu') {
+      if (!selectedCell) return;
+      const res = ctrl.commitPusu(selectedCell.x, selectedCell.y);
+      if (!res.ok) { showError('Hata: ' + res.message); return; }
+      selectedCell = null;
+      render();
+      return;
+    }
+
+    if (s.phase === 'battle') {
+      if (!selectedCell || selectedUnit === null) return;
+      const res = ctrl.commitUnit(selectedCell.x, selectedCell.y, selectedUnit);
+      if (!res.ok) { showError('Hata: ' + res.message); return; }
+      selectedCell = null;
+      selectedUnit = null;
+      render();
+    }
+  }
+
+  function render() {
+    const s = ctrl.getState();
+
+    let phaseText = '';
+    if (s.phase === 'pusu') phaseText = '💣 PUSU KURMA (2 hak)';
+    else if (s.phase === 'battle') phaseText = '⚔️ SAVAŞ — ' + (s.current_front + 1) + '. CEPHE';
+    else if (s.phase === 'final_pusu') phaseText = '🧨 SON TUZAK (1 hak)';
+    else if (s.phase === 'done') phaseText = '🏁 SAVAŞ BİTTİ';
+    document.getElementById('phaseLabel').textContent = phaseText;
+
+    const dots = document.getElementById('frontDots');
+    dots.innerHTML = '';
+    for (let i = 0; i < 5; i++) {
+      const d = document.createElement('div');
+      d.className = 'dot' + (i < s.current_front ? ' filled' : '');
+      dots.appendChild(d);
+    }
+
+    renderGrid('gridMe', s.player1_grid, false, s);
+    renderGrid('gridOpp', s.player2_grid, true, s);
+
+    const unitSelect = document.getElementById('unitSelect');
+    const unitLabel = document.getElementById('unitLabel');
+    if (s.phase === 'battle') {
+      unitLabel.style.display = 'block';
+      unitSelect.style.display = 'flex';
+      unitSelect.innerHTML = '';
+      window.PusuEngine.UNIT_TYPES.forEach(u => {
+        const info = window.PusuEngine.UNIT_INFO[u];
+        const remaining = s.my_used_units[u];
+        const el = document.createElement('div');
+        el.className = 'unit-choice u-' + u +
+          (selectedUnit === u ? ' selected' : '') +
+          (remaining <= 0 ? ' disabled' : '');
+        el.innerHTML = '<div class="emoji">' + info.emoji + '</div><div class="count">' + remaining + ' kaldı</div>';
+        el.onclick = () => selectUnit(u);
+        unitSelect.appendChild(el);
+      });
+    } else {
+      unitLabel.style.display = 'none';
+      unitSelect.style.display = 'none';
+    }
+
+    const btn = document.getElementById('btnAction');
+    if (s.phase === 'pusu' || s.phase === 'final_pusu') {
+      btn.textContent = 'TUZAK KUR';
+      btn.disabled = !selectedCell;
+    } else if (s.phase === 'battle') {
+      btn.textContent = 'BİRLİK GÖNDER';
+      btn.disabled = !selectedCell || selectedUnit === null;
+    } else {
+      btn.textContent = '-';
+      btn.disabled = true;
+    }
+    btn.onclick = performAction;
+
+    let note = '';
+    if (s.phase === 'pusu') note = 'Düşman bölgesinde bir kare seç, sonra TUZAK KUR\'a bas.';
+    else if (s.phase === 'battle') note = 'Kendi bölgende aktif cephede bir kare, sonra bir birlik seç.';
+    else if (s.phase === 'final_pusu') note = 'Son tuzağını kur.';
+    document.getElementById('waitingNote').textContent = note;
+
+    if (s.phase === 'done') {
+      setTimeout(showResults, 700);
+    }
+  }
+
+  function renderGrid(gridId, gridData, isOpponent, s) {
+    const gridEl = document.getElementById(gridId);
+    for (let x = 0; x < 5; x++) {
+      for (let y = 0; y < 5; y++) {
+        const cell = gridEl.children[x * 5 + y];
+        const state = gridData[x][y];
+
+        cell.className = 'cell';
+        cell.innerHTML = '';
+
+        if (state.startsWith('unit:')) {
+          const unit = state.split(':')[1];
+          cell.classList.add('unit', 'u-' + unit);
+          cell.innerHTML = unitCellHTML(unit);
+        } else if (state === 'trap') {
+          cell.classList.add('trap');
+          cell.textContent = '💣';
+        }
+
+        const isEmpty = (state === 'empty');
+        let selectable = false;
+        if (s.phase === 'battle') {
+          selectable = !isOpponent && isEmpty && x === s.current_front;
+        } else if (s.phase === 'pusu' || s.phase === 'final_pusu') {
+          selectable = isOpponent && isEmpty;
+        }
+        if (selectable) {
+          cell.classList.add('selectable', 'glow');
+        }
+
+        if (selectedCell && selectedCell.x === x && selectedCell.y === y) {
+          const onCorrectBoard = (s.phase === 'battle') ? !isOpponent : isOpponent;
+          if (onCorrectBoard) cell.classList.add('selected');
+        }
+      }
+    }
+  }
+
+  function showResults() {
+    const res = ctrl.getResults();
+    if (!res.ok) return;
+
+    const overlay = document.getElementById('resultOverlay');
+    const title = document.getElementById('resultTitle');
+    if (res.winner === 'player1') { title.textContent = 'SAVAŞI KAZANDIN! 🏆'; title.className = 'win'; }
+    else if (res.winner === 'player2') { title.textContent = 'SAVAŞI AI KAZANDI'; title.className = 'lose'; }
+    else { title.textContent = 'BERABERE'; title.className = 'draw'; }
+
+    let html = '<table><tr><th>Cephe</th><th>Sen</th><th>AI</th><th>Kazanan</th></tr>';
+    for (let i = 0; i < 5; i++) {
+      const my = res.scores_p1[i], opp = res.scores_p2[i];
+      let w = 'Berabere';
+      if (my > opp) w = 'SEN';
+      else if (opp > my) w = 'AI';
+      html += '<tr><td>' + (i + 1) + '</td><td>' + my + '</td><td>' + opp + '</td><td>' + w + '</td></tr>';
+    }
+    html += '</table>';
+    document.getElementById('resultTableWrap').innerHTML = html;
+    overlay.style.display = 'flex';
+  }
+
+  startNewGame();
+</script>
+</body>
+</html>

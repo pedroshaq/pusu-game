@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PUSU - Online</title>
+<style>
+  :root {
+    --bg-deep: #0b1410; --bg-mid: #142620; --bg-panel: #1b3129;
+    --ink: #eaf4ee; --ink-dim: #8fae9d; --gold: #f1c40f; --danger: #e74c3c; --ok: #6ee7a8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background:
+      radial-gradient(ellipse at 50% -10%, #234639 0%, transparent 55%),
+      radial-gradient(ellipse at 85% 105%, #1d3a2e 0%, transparent 50%),
+      linear-gradient(180deg, var(--bg-deep), var(--bg-mid) 60%, var(--bg-deep));
+    color: var(--ink); font-family: -apple-system, 'Segoe UI', sans-serif;
+    display: flex; flex-direction: column; align-items: center; padding: 20px 12px 60px;
+  }
+  h1.title {
+    font-family: Georgia, 'Times New Roman', serif; font-weight: 800; letter-spacing: 0.14em;
+    font-size: clamp(1.8rem, 6vw, 2.6rem); margin: 6px 0 2px;
+    background: linear-gradient(120deg, var(--gold), #ff9d5c 45%, #6ee7a8);
+    -webkit-background-clip: text; background-clip: text; color: transparent; text-align: center;
+  }
+  .subtitle { color: var(--ink-dim); font-size: 0.85rem; margin-bottom: 14px; text-align: center; }
+
+  .room-panel {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px; padding: 16px 20px; margin-bottom: 18px; text-align: center;
+    max-width: 420px; width: 100%;
+  }
+  .room-panel .row { display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+  .room-panel input {
+    padding: 9px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
+    background: var(--bg-deep); color: var(--ink); font-size: 0.9rem; width: 130px; text-transform: uppercase;
+  }
+  .room-panel .status { font-size: 0.85rem; color: var(--gold); margin-top: 10px; min-height: 1.2em; }
+  .room-panel .code-display { font-family: Georgia, serif; font-size: 1.6rem; letter-spacing: 0.15em; color: var(--gold); font-weight: 800; margin-top: 4px; }
+
+  button.primary {
+    padding: 11px 22px; border: none; border-radius: 999px;
+    background: linear-gradient(120deg, var(--gold), #ff9d5c);
+    color: #241300; font-weight: 800; font-size: 0.9rem; cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+  button.primary:disabled { opacity: 0.35; cursor: not-allowed; }
+  button.primary:not(:disabled):hover { transform: translateY(-2px); }
+  button.ghost {
+    padding: 11px 20px; border: 1px solid rgba(255,255,255,0.25); border-radius: 999px;
+    background: transparent; color: var(--ink); font-weight: 700; font-size: 0.85rem; cursor: pointer;
+  }
+
+  .game-area { display: none; flex-direction: column; align-items: center; width: 100%; }
+  .game-area.visible { display: flex; }
+
+  .statusbar {
+    display: flex; align-items: center; justify-content: center; gap: 18px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 999px; padding: 8px 20px; margin-bottom: 16px; font-size: 0.85rem;
+    flex-wrap: wrap; text-align: center;
+  }
+  .statusbar .phase-label { font-family: Georgia, serif; font-weight: 800; color: var(--gold); }
+  .front-dots { display: flex; gap: 6px; }
+  .front-dots .dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.15); }
+  .front-dots .dot.filled { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+
+  .boards { display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px; width: 100%; max-width: 780px; }
+  .board-wrapper {
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px; padding: 14px; flex: 1; min-width: 260px; max-width: 340px;
+  }
+  .board-wrapper h3 { font-family: Georgia, serif; font-size: 0.95rem; text-align: center; margin: 0 0 10px; color: var(--ink-dim); letter-spacing: 0.04em; }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+  .cell {
+    aspect-ratio: 1; border-radius: 8px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.15); font-size: 1.1rem; transition: transform 0.12s ease; position: relative;
+  }
+  .cell:active { transform: scale(0.93); }
+  .cell.selected { outline: 2px solid var(--gold); box-shadow: 0 0 14px rgba(241,196,15,0.5); }
+  .cell.selectable:hover { background: rgba(255,255,255,0.1); }
+  .cell.glow { animation: cellGlow 1.6s infinite; }
+  @keyframes cellGlow { 0%, 100% { box-shadow: 0 0 4px rgba(110,231,168,0.3); } 50% { box-shadow: 0 0 16px rgba(110,231,168,0.7); } }
+  .cell.trap { background: linear-gradient(150deg, #ff8f6b, var(--danger)); color: #2a0a05; }
+  .cell.occupied { background: rgba(255,255,255,0.08); border-style: dashed; color: var(--ink-dim); }
+  .cell.unit { color: #16261d; font-weight: 800; animation: cellReveal 0.35s ease; }
+  @keyframes cellReveal { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .cell .u-emoji { font-size: 1.15rem; line-height: 1; }
+  .cell .u-name { font-size: 0.42rem; letter-spacing: 0.03em; margin-top: 1px; }
+
+  .u-1 { background: linear-gradient(150deg, #b7d18f, #7f9c5c); }
+  .u-2 { background: linear-gradient(150deg, #c6cdd6, #8d99ae); }
+  .u-3 { background: linear-gradient(150deg, #ffbf7a, #d97706); }
+  .u-4 { background: linear-gradient(150deg, #ff9c8f, #c0392b); }
+  .u-5 { background: linear-gradient(150deg, #fff2a8, #f1c40f); }
+
+  .hand-label { color: var(--ink-dim); font-size: 0.8rem; margin: 6px 0 8px; letter-spacing: 0.05em; }
+  .unit-select { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 14px; }
+  .unit-choice {
+    width: 66px; height: 78px; border-radius: 10px; border: 2px solid transparent;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    cursor: pointer; color: #16261d; font-weight: 800; transition: transform 0.15s ease;
+  }
+  .unit-choice:hover { transform: translateY(-4px); }
+  .unit-choice.selected { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); transform: translateY(-6px); }
+  .unit-choice.disabled { opacity: 0.3; cursor: not-allowed; }
+  .unit-choice .emoji { font-size: 1.4rem; }
+  .unit-choice .count { font-size: 0.6rem; opacity: 0.8; }
+
+  .actions { display: flex; gap: 12px; margin-top: 6px; }
+  .waiting-note { color: var(--ink-dim); font-size: 0.8rem; margin-top: 8px; min-height: 1.2em; text-align: center; }
+
+  #resultOverlay {
+    position: fixed; inset: 0; z-index: 900; background: rgba(4, 10, 8, 0.92);
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  #resultOverlay .box {
+    background: var(--bg-panel); border: 1px solid #2f5142; border-radius: 18px;
+    padding: 28px 26px; max-width: 460px; text-align: center;
+    box-shadow: 0 24px 70px rgba(0,0,0,0.55); max-height: 85vh; overflow-y: auto;
+  }
+  #resultOverlay h2 { font-family: Georgia, serif; font-size: 1.7rem; margin: 0 0 10px; }
+  #resultOverlay h2.win { color: var(--ok); }
+  #resultOverlay h2.lose { color: #ff8585; }
+  #resultOverlay h2.draw { color: var(--gold); }
+  #resultOverlay table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 14px 0; }
+  #resultOverlay th, #resultOverlay td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  #resultOverlay th { color: var(--ink-dim); font-weight: 600; }
+
+  .error-toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: #7a1f1f; color: #ffe3e3; padding: 10px 18px; border-radius: 10px;
+    font-size: 0.85rem; display: none; z-index: 1100; max-width: 90vw; text-align: center;
+  }
+
+  @media (max-width: 700px) {
+    .boards { flex-direction: column; align-items: center; }
+    .board-wrapper { width: 100%; max-width: 340px; }
+  }
+</style>
+</head>
+<body>
+
+  <div id="resultOverlay">
+    <div class="box">
+      <h2 id="resultTitle">-</h2>
+      <div id="resultTableWrap"></div>
+      <button class="primary" onclick="resetRoom()">YENİDEN OYNA</button>
+    </div>
+  </div>
+
+  <div class="error-toast" id="errorToast"></div>
+
+  <h1 class="title">PUSU</h1>
+  <div class="subtitle">Online — arkadaşına karşı</div>
+
+  <div class="room-panel" id="roomPanel">
+    <div><button class="primary" onclick="createRoom()">ODA KUR</button></div>
+    <div class="row">
+      <input id="joinCodeInput" placeholder="ODA KODU" maxlength="5">
+      <button class="ghost" onclick="joinRoom()">ODAYA KATIL</button>
+    </div>
+    <div class="status" id="roomStatus"></div>
+  </div>
+
+  <div class="game-area" id="gameArea">
+    <div class="statusbar">
+      <div class="phase-label" id="phaseLabel">-</div>
+      <div class="front-dots" id="frontDots"></div>
+    </div>
+
+    <div class="boards">
+      <div class="board-wrapper">
+        <h3>SENİN BÖLGEN</h3>
+        <div class="grid" id="gridMe"></div>
+      </div>
+      <div class="board-wrapper">
+        <h3>DÜŞMAN BÖLGESİ</h3>
+        <div class="grid" id="gridOpp"></div>
+      </div>
+    </div>
+
+    <div class="hand-label" id="unitLabel" style="display:none;">BİRLİK SEÇ</div>
+    <div class="unit-select" id="unitSelect" style="display:none;"></div>
+
+    <div class="actions">
+      <button class="primary" id="btnAction" disabled>-</button>
+    </div>
+    <div class="waiting-note" id="waitingNote"></div>
+  </div>
+
+<script>
+  const UNIT_INFO = {
+    1: { name: "PİYADE",   emoji: "🪖" },
+    2: { name: "MEKANİZE", emoji: "🚙" },
+    3: { name: "TANK",     emoji: "🛡️" },
+    4: { name: "HAVA K.",  emoji: "✈️" },
+    5: { name: "TOPÇU",    emoji: "💥" },
+  };
+
+  let inRoom = false;
+  let pollInterval = null;
+  let selectedCell = null;
+  let selectedUnit = null;
+  let gridsBuilt = false;
+
+  function showError(msg) {
+    const t = document.getElementById('errorToast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    clearTimeout(showError._t);
+    showError._t = setTimeout(() => { t.style.display = 'none'; }, 3000);
+  }
+
+  function apiCall(url, options) {
+    return fetch(url, options).then(res => res.json())
+      .catch(err => { showError('Bağlantı hatası: ' + err.message); return null; });
+  }
+
+  function createRoom() {
+    apiCall('/create_room', { method: 'POST' }).then(data => {
+      if (!data) return;
+      if (data.status === 'success') {
+        window.__myRole = data.role;
+        document.getElementById('roomStatus').innerHTML =
+          'Oda kuruldu, kodu arkadaşınla paylaş:<div class="code-display">' + data.room_code + '</div>';
+        enterRoom();
+      } else showError(data.message || 'Oda kurulamadı.');
+    });
+  }
+
+  function joinRoom() {
+    const code = document.getElementById('joinCodeInput').value.trim();
+    if (!code) { showError('Oda kodu gir.'); return; }
+    apiCall('/join_room', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room_code: code }),
+    }).then(data => {
+      if (!data) return;
+      if (data.status === 'success') {
+        window.__myRole = data.role;
+        document.getElementById('roomStatus').textContent = 'Odaya katıldın: ' + data.room_code;
+        enterRoom();
+      } else showError(data.message || 'Odaya katılamadın.');
+    });
+  }
+
+  function enterRoom() {
+    inRoom = true;
+    document.getElementById('gameArea').classList.add('visible');
+    buildGrids();
+    startPolling();
+  }
+
+  function buildGrids() {
+    if (gridsBuilt) return;
+    gridsBuilt = true;
+    ['gridMe', 'gridOpp'].forEach(id => {
+      const grid = document.getElementById(id);
+      grid.innerHTML = '';
+      for (let x = 0; x < 5; x++) {
+        for (let y = 0; y < 5; y++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.onclick = () => onCellClick(id === 'gridOpp', x, y);
+          grid.appendChild(cell);
+        }
+      }
+    });
+  }
+
+  function startPolling() {
+    refreshState();
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(refreshState, 1000);
+  }
+
+  let lastState = null;
+
+  function refreshState() {
+    if (!inRoom) return;
+    apiCall('/game_state', { method: 'GET' }).then(data => {
+      if (!data) return;
+      if (data.status !== 'success') {
+        document.getElementById('waitingNote').textContent = data.message || '';
+        return;
+      }
+      lastState = data;
+      render(data);
+    });
+  }
+
+  function onCellClick(isOpponent, x, y) {
+    if (!lastState) return;
+    const s = lastState;
+
+    if (s.phase === 'pusu' || s.phase === 'final_pusu') {
+      if (!isOpponent) { showError("Tuzak sadece DÜŞMAN BÖLGESİ'ne kurulabilir!"); return; }
+      if (!s.is_my_turn) return;
+      selectedCell = { x, y };
+      render(s);
+      return;
+    }
+
+    if (s.phase === 'battle') {
+      if (isOpponent || !s.is_my_turn) return;
+      if (s.my_grid[x][y] !== 'empty') return;
+      if (x !== s.current_front) { showError('Bu tur sadece ' + (s.current_front + 1) + '. cepheye birlik gönderebilirsin.'); return; }
+      selectedCell = { x, y };
+      render(s);
+    }
+  }
+
+  function selectUnit(unit) {
+    if (!lastState || lastState.my_used_units[unit] <= 0) return;
+    selectedUnit = unit;
+    render(lastState);
+  }
+
+  function performAction() {
+    if (!lastState) return;
+    const s = lastState;
+
+    if (s.phase === 'pusu' || s.phase === 'final_pusu') {
+      if (!selectedCell) return;
+      apiCall('/commit_pusu', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x: selectedCell.x, y: selectedCell.y }),
+      }).then(data => {
+        if (!data) return;
+        if (data.status !== 'success') { showError('Hata: ' + data.message); return; }
+        selectedCell = null;
+        refreshState();
+      });
+      return;
+    }
+
+    if (s.phase === 'battle') {
+      if (!selectedCell || selectedUnit === null) return;
+      apiCall('/commit_unit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x: selectedCell.x, y: selectedCell.y, unit: selectedUnit }),
+      }).then(data => {
+        if (!data) return;
+        if (data.status !== 'success') { showError('Hata: ' + data.message); return; }
+        selectedCell = null;
+        selectedUnit = null;
+        refreshState();
+      });
+    }
+  }
+
+  function unitCellHTML(unit) {
+    const info = UNIT_INFO[unit];
+    return '<div class="u-emoji">' + info.emoji + '</div><div class="u-name">' + info.name + '</div>';
+  }
+
+  function render(s) {
+    let phaseText = '';
+    if (s.phase === 'pusu') phaseText = '💣 PUSU KURMA (2 hak)';
+    else if (s.phase === 'battle') phaseText = '⚔️ SAVAŞ — ' + (s.current_front + 1) + '. CEPHE';
+    else if (s.phase === 'final_pusu') phaseText = '🧨 SON TUZAK (1 hak)';
+    else if (s.phase === 'done') phaseText = '🏁 SAVAŞ BİTTİ';
+    document.getElementById('phaseLabel').textContent = phaseText;
+
+    const dots = document.getElementById('frontDots');
+    dots.innerHTML = '';
+    for (let i = 0; i < 5; i++) {
+      const d = document.createElement('div');
+      d.className = 'dot' + (i < s.current_front ? ' filled' : '');
+      dots.appendChild(d);
+    }
+
+    renderGrid('gridMe', s.my_grid, false, s);
+    renderGrid('gridOpp', s.opponent_grid, true, s);
+
+    const unitSelect = document.getElementById('unitSelect');
+    const unitLabel = document.getElementById('unitLabel');
+    if (s.phase === 'battle') {
+      unitLabel.style.display = 'block';
+      unitSelect.style.display = 'flex';
+      unitSelect.innerHTML = '';
+      [1, 2, 3, 4, 5].forEach(u => {
+        const info = UNIT_INFO[u];
+        const remaining = s.my_used_units[u];
+        const el = document.createElement('div');
+        el.className = 'unit-choice u-' + u +
+          (selectedUnit === u ? ' selected' : '') +
+          (remaining <= 0 ? ' disabled' : '');
+        el.innerHTML = '<div class="emoji">' + info.emoji + '</div><div class="count">' + remaining + ' kaldı</div>';
+        el.onclick = () => selectUnit(u);
+        unitSelect.appendChild(el);
+      });
+    } else {
+      unitLabel.style.display = 'none';
+      unitSelect.style.display = 'none';
+    }
+
+    const btn = document.getElementById('btnAction');
+    if (s.phase === 'pusu' || s.phase === 'final_pusu') {
+      btn.textContent = 'TUZAK KUR';
+      btn.disabled = !selectedCell || !s.is_my_turn;
+    } else if (s.phase === 'battle') {
+      btn.textContent = 'BİRLİK GÖNDER';
+      btn.disabled = !selectedCell || selectedUnit === null || !s.is_my_turn;
+    } else {
+      btn.textContent = '-';
+      btn.disabled = true;
+    }
+    btn.onclick = performAction;
+
+    let note = '';
+    if (!s.is_my_turn && s.phase !== 'done') note = 'Rakibin hamlesi bekleniyor...';
+    else if (s.phase === 'pusu') note = "Düşman bölgesinde bir kare seç, sonra TUZAK KUR'a bas.";
+    else if (s.phase === 'battle') note = 'Kendi bölgende aktif cephede bir kare, sonra bir birlik seç.';
+    else if (s.phase === 'final_pusu') note = 'Son tuzağını kur.';
+    document.getElementById('waitingNote').textContent = note;
+
+    if (s.phase === 'done') {
+      clearInterval(pollInterval);
+      setTimeout(showResults, 700);
+    }
+  }
+
+  function renderGrid(gridId, gridData, isOpponent, s) {
+    const gridEl = document.getElementById(gridId);
+    for (let x = 0; x < 5; x++) {
+      for (let y = 0; y < 5; y++) {
+        const cell = gridEl.children[x * 5 + y];
+        const state = gridData[x][y];
+
+        cell.className = 'cell';
+        cell.innerHTML = '';
+
+        if (state.startsWith('unit:')) {
+          const unit = state.split(':')[1];
+          cell.classList.add('unit', 'u-' + unit);
+          cell.innerHTML = unitCellHTML(unit);
+        } else if (state === 'trap') {
+          cell.classList.add('trap');
+          cell.textContent = '💣';
+        }
+
+        const isEmpty = (state === 'empty');
+        let selectable = false;
+        if (s.is_my_turn) {
+          if (s.phase === 'battle') selectable = !isOpponent && isEmpty && x === s.current_front;
+          else if (s.phase === 'pusu' || s.phase === 'final_pusu') selectable = isOpponent && isEmpty;
+        }
+        if (selectable) cell.classList.add('selectable', 'glow');
+
+        if (selectedCell && selectedCell.x === x && selectedCell.y === y) {
+          const onCorrectBoard = (s.phase === 'battle') ? !isOpponent : isOpponent;
+          if (onCorrectBoard) cell.classList.add('selected');
+        }
+      }
+    }
+  }
+
+  function showResults() {
+    apiCall('/results', { method: 'GET' }).then(data => {
+      if (!data || data.status !== 'success') return;
+      const overlay = document.getElementById('resultOverlay');
+      renderResultTitle(data);
+
+      let html = '<table><tr><th>Cephe</th><th>Sen</th><th>Rakip</th><th>Kazanan</th></tr>';
+      const myRole = window.__myRole;
+      for (let i = 0; i < 5; i++) {
+        const p1 = data.scores_p1[i], p2 = data.scores_p2[i];
+        const my = myRole === 'player1' ? p1 : p2;
+        const opp = myRole === 'player1' ? p2 : p1;
+        let w = 'Berabere';
+        if (my > opp) w = 'SEN';
+        else if (opp > my) w = 'RAKİP';
+        html += '<tr><td>' + (i + 1) + '</td><td>' + my + '</td><td>' + opp + '</td><td>' + w + '</td></tr>';
+      }
+      html += '</table>';
+      document.getElementById('resultTableWrap').innerHTML = html;
+      overlay.style.display = 'flex';
+    });
+  }
+
+  function renderResultTitle(data) {
+    const title = document.getElementById('resultTitle');
+    const myRole = window.__myRole;
+    const won = data.winner === myRole;
+    const lost = data.winner !== myRole && data.winner !== 'draw';
+    if (data.winner === 'draw') { title.textContent = 'BERABERE'; title.className = 'draw'; }
+    else if (won) { title.textContent = 'SAVAŞI KAZANDIN! 🏆'; title.className = 'win'; }
+    else { title.textContent = 'SAVAŞI RAKİP KAZANDI'; title.className = 'lose'; }
+  }
+
+  function resetRoom() {
+    apiCall('/reset_room', { method: 'POST' }).then(data => {
+      if (!data) return;
+      if (data.status === 'success') {
+        document.getElementById('resultOverlay').style.display = 'none';
+        selectedCell = null;
+        selectedUnit = null;
+        startPolling();
+      }
+    });
+  }
+</script>
+</body>
+</html>
